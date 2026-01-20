@@ -1,116 +1,259 @@
-# cslb-webhook
+# CSLB Webhook
 
-Webhook service that ensures all repositories in the `test3032001` org have the topic `cslb-id-2343`. Supports GitHub webhook events: `ping`, `push`, and `repository` (created).
+A serverless GitHub webhook that automatically tags all repositories in the `test3032001` organization with the topic `cslb-id-2343`.
 
-## Local Development
+## 🎯 What It Does
 
-1. Set your GitHub token (must include `repo` scope for private repos):
+When a repository is **created** or receives a **push** in the `test3032001` organization, this webhook automatically adds the `cslb-id-2343` topic to that repository. This ensures consistent tagging across all org repos without manual intervention.
 
-```bash
-export GITHUB_TOKEN=ghp_your_token_here
+## 🏗️ Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  GitHub Webhook │────▶│  API Gateway v2  │────▶│  AWS Lambda     │
+│  (Org Events)   │     │  (HTTP API)      │     │  (Node.js 20)   │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                                                          │
+                                                          ▼
+                                                 ┌─────────────────┐
+                                                 │  GitHub API     │
+                                                 │  (Set Topics)   │
+                                                 └─────────────────┘
 ```
 
-2. Install dependencies:
+### Components
 
-```bash
-npm install
+| Component | Description |
+|-----------|-------------|
+| **AWS Lambda** | Runs the webhook handler (Node.js 20, 128MB, 30s timeout) |
+| **API Gateway v2** | HTTP API endpoint that receives GitHub webhooks |
+| **Lambda Layer** | Contains npm dependencies (Express, serverless-http) |
+| **Terraform** | Infrastructure as Code for all AWS resources |
+| **GitHub Actions** | CI/CD pipeline for automated deployments |
+
+## 🔐 Security
+
+### 1. Webhook Signature Verification (HMAC SHA-256)
+
+Every incoming webhook request is verified using GitHub's signature mechanism:
+
+```javascript
+// GitHub signs each payload with your secret
+X-Hub-Signature-256: sha256=<HMAC-SHA256-signature>
+
+// We verify by computing our own signature and comparing
+const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET)
+  .update(rawBody)
+  .digest("hex");
+const expected = `sha256=${hmac}`;
+
+// Timing-safe comparison prevents timing attacks
+crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
 ```
 
-3. Start the server:
+**Why this matters:**
+- Prevents spoofed requests - only GitHub can produce valid signatures
+- Uses constant-time comparison to prevent timing attacks
+- Rejects requests without valid signatures with 401
 
-```bash
-node server.js
+### 2. GitHub Token (Classic PAT)
+
+The webhook uses a GitHub Personal Access Token with `repo` scope to:
+- Read existing repository topics
+- Write/update repository topics
+
+**Token requirements:**
+- Must have `repo` scope (for private repos) or `public_repo` (public only)
+- Stored as Lambda environment variable
+- Never logged or exposed in responses
+
+### 3. Request Validation
+
+The webhook validates:
+- ✅ Signature is present and valid
+- ✅ Event type is supported (`ping`, `push`, `repository`)
+- ✅ Repository belongs to the target organization
+- ✅ For `repository` events, action must be `created`
+
+### 4. Infrastructure Security
+
+| Layer | Security Measure |
+|-------|------------------|
+| **API Gateway** | HTTPS only, no authentication (GitHub handles via signature) |
+| **Lambda** | Minimal IAM permissions, environment variables for secrets |
+| **Logs** | CloudWatch with 7-day retention, no sensitive data logged |
+
+## 📁 Project Structure
+
+```
+cslb-webhook/
+├── lambda.js              # Main Lambda handler
+├── server.js              # Local development server
+├── package.json           # Dependencies
+├── terraform/
+│   ├── main.tf            # AWS infrastructure
+│   ├── variables.tf       # Input variables
+│   ├── outputs.tf         # Output values
+│   └── lambda_layer.zip   # Packaged dependencies
+└── .github/
+    └── workflows/
+        └── deploy.yml     # CI/CD pipeline
 ```
 
-The server listens on `0.0.0.0:3000`:
-- Health: `GET /` → `✅ Webhook server is running`
-- Webhook: `POST /webhook`
+## 🔄 How It Works (Flow)
 
-## Production Deployment (AWS Lambda)
+```
+1. User creates repo in test3032001 org
+         │
+         ▼
+2. GitHub sends POST to /webhook with:
+   - X-Hub-Signature-256 header (HMAC signature)
+   - X-GitHub-Event: repository
+   - JSON body with repo details
+         │
+         ▼
+3. Lambda verifies signature
+   (HMAC-SHA256 with shared secret)
+         │
+         ▼
+4. Lambda checks:
+   - Is this our org? (test3032001)
+   - Is this a creation event?
+         │
+         ▼
+5. Lambda calls GitHub API:
+   - GET /repos/{owner}/{repo}/topics
+   - Adds cslb-id-2343 to existing topics
+   - PUT /repos/{owner}/{repo}/topics
+         │
+         ▼
+6. Returns 200 OK
+```
+
+## 🚀 Deployment
 
 ### Prerequisites
 
 - AWS account with credentials configured
-- Terraform installed locally
-- GitHub Actions enabled on this repo
+- Terraform >= 1.0
+- Node.js 20.x
+- GitHub Classic PAT with `repo` scope
 
-### Step 1: Create AWS IAM Role for GitHub Actions (OIDC)
+### Manual Deployment
 
-```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
-  --client-id-list sts.amazonaws.com
-```
+1. **Create the Lambda Layer:**
+   ```bash
+   cd terraform
+   mkdir -p layer/nodejs
+   cd layer/nodejs
+   npm init -y
+   npm install express body-parser serverless-http
+   cd ..
+   zip -r ../lambda_layer.zip nodejs
+   cd ..
+   ```
 
-Then create an IAM role that allows GitHub Actions to assume it. Save the role ARN.
+2. **Deploy with Terraform:**
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply \
+     -var="github_token=ghp_your_token" \
+     -var="webhook_secret=your_webhook_secret"
+   ```
 
-### Step 2: Add GitHub Secrets
+3. **Configure GitHub Webhook:**
+   - Go to `https://github.com/organizations/test3032001/settings/hooks`
+   - Add webhook with:
+     - **Payload URL:** `https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/webhook`
+     - **Content type:** `application/json`
+     - **Secret:** Same as `webhook_secret` above
+     - **Events:** `Pushes` and `Repositories`
 
-1. Go to your repo → **Settings** → **Secrets and variables** → **Actions**
-2. Add:
-   - `AWS_ROLE_ARN`: The role ARN from Step 1
-   - `GITHUB_TOKEN`: Your GitHub personal access token (used by the webhook)
+### CI/CD Deployment (GitHub Actions)
 
-### Step 3: Deploy via GitHub Actions
+Push to `main` branch triggers automatic deployment:
 
-Push to `main` branch:
+1. Builds Lambda layer with dependencies
+2. Runs `terraform apply` with secrets from GitHub Actions
+3. Updates Lambda function code
 
-```bash
-git add .
-git commit -m "Deploy to AWS Lambda"
-git push origin main
-```
+**Required GitHub Secrets:**
 
-GitHub Actions will automatically:
-- Build the Lambda function
-- Run Terraform to deploy to AWS
-- Output your webhook URL
+| Secret | Description |
+|--------|-------------|
+| `AWS_ROLE_ARN` | IAM role ARN for OIDC authentication |
+| `GITHUB_TOKEN_WEBHOOK` | GitHub PAT for API calls |
+| `WEBHOOK_SECRET` | Shared secret for signature verification |
 
-### Step 4: Configure GitHub Webhook
-
-1. Go to: `https://github.com/organizations/test3032001/settings/hooks`
-2. Add a new webhook:
-   - **Payload URL**: Use the output from GitHub Actions (e.g., `https://xxx.execute-api.us-east-1.amazonaws.com/prod/webhook`)
-   - **Content type**: `application/json`
-   - **Events**: Select "Let me select individual events" → Check `Pushes` and `Repositories`
-3. Save
-
-### Manual Deployment (Alternative)
-
-If you prefer manual deployment:
-
-```bash
-cd terraform
-terraform init
-terraform apply \
-  -var="github_token=$GITHUB_TOKEN"
-```
-
-Copy the `webhook_url` output and configure it in GitHub.
-
-## Architecture
-
-- **AWS Lambda**: Serverless function (Node.js 20)
-- **API Gateway**: Public HTTPS endpoint
-- **CloudWatch Logs**: Structured logging
-- **Secrets Manager**: Stores GitHub token securely
-
-## Cost
-
-- ~$2-5/month (scales to zero when idle)
-- Free tier covers most usage
-
-## Monitoring
-
-View logs in CloudWatch:
+## 🧪 Local Development
 
 ```bash
-aws logs tail /aws/lambda/cslb-webhook --follow
+# Set environment variables
+export GITHUB_TOKEN=ghp_your_token
+export WEBHOOK_SECRET=your_secret
+
+# Install dependencies
+npm install
+
+# Run local server
+node server.js
+# Server runs on http://localhost:3000
 ```
 
-## Notes
+Test with curl:
+```bash
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-GitHub-Event: ping" \
+  -d '{}'
+```
 
-- Do not commit secrets. Use environment variables and AWS Secrets Manager.
-- GitHub token must have `repo` scope to access private repositories.
-- Lambda has 30-second timeout; sufficient for webhook processing.
+## 📊 Monitoring
+
+### CloudWatch Logs
+
+View Lambda logs:
+```bash
+aws logs tail /aws/lambda/cslb-webhook --follow --region us-east-1
+```
+
+### Successful Request Log:
+```
+Lambda event body captured: 6677 bytes
+Webhook request received
+Signature match: true
+Signature verified
+Processing webhook for test3032001/my-repo
+Adding topic cslb-id-2343 to test3032001/my-repo
+✅ Added cslb-id-2343 to test3032001/my-repo
+```
+
+## 💰 Cost Estimate
+
+| Resource | Monthly Cost |
+|----------|--------------|
+| Lambda (1000 invocations) | ~$0.01 |
+| API Gateway (1000 requests) | ~$0.01 |
+| CloudWatch Logs | ~$0.50 |
+| **Total** | **~$0.50 - $2/month** |
+
+## 🛠️ Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `401 bad signature` | Check WEBHOOK_SECRET matches GitHub webhook config |
+| `401 Bad credentials` | GitHub token is invalid or expired |
+| `403 Resource not accessible` | Token missing `repo` scope - use Classic PAT |
+| `Cannot POST /prod/webhook` | Check API Gateway routes are deployed |
+
+## 📝 Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_TOKEN` | Yes | GitHub PAT with `repo` scope |
+| `WEBHOOK_SECRET` | Yes | Shared secret for webhook signature |
+
+## 📜 License
+
+MIT
