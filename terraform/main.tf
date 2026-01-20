@@ -127,7 +127,7 @@ resource "aws_apigatewayv2_integration" "lambda" {
   api_id             = aws_apigatewayv2_api.webhook.id
   integration_type   = "AWS_PROXY"
   integration_method = "POST"
-  target             = "arn:aws:apigatewayv2:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.webhook.arn}/invocations"
+  integration_uri    = aws_lambda_function.webhook.invoke_arn
   payload_format_version = "2.0"
 }
 
