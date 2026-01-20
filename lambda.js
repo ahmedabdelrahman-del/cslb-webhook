@@ -13,21 +13,36 @@ function requireToken() {
 }
 
 function verifySignature(req) {
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) throw new Error("Missing WEBHOOK_SECRET env var");
+  try {
+    const secret = process.env.WEBHOOK_SECRET;
+    console.log("WEBHOOK_SECRET set:", !!secret);
+    if (!secret) return false;
 
-  const sig = req.get("X-Hub-Signature-256");
-  const raw = req.rawBody;
-  if (!sig || !raw) return false;
+    const sig = req.get("X-Hub-Signature-256");
+    const raw = req.rawBody;
+    console.log("Signature header:", sig ? "present" : "missing");
+    console.log("Raw body:", raw ? `${raw.length} bytes` : "missing");
+    if (!sig || !raw) return false;
 
-  const hmac = crypto.createHmac("sha256", secret).update(raw).digest("hex");
-  const expected = `sha256=${hmac}`;
+    const hmac = crypto.createHmac("sha256", secret).update(raw).digest("hex");
+    const expected = `sha256=${hmac}`;
+    console.log("Expected sig:", expected.substring(0, 20) + "...");
+    console.log("Received sig:", sig.substring(0, 20) + "...");
 
-  const sigBuf = Buffer.from(sig);
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length) return false;
+    const sigBuf = Buffer.from(sig);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length) {
+      console.log("Signature length mismatch:", sigBuf.length, "vs", expBuf.length);
+      return false;
+    }
 
-  return crypto.timingSafeEqual(expBuf, sigBuf);
+    const result = crypto.timingSafeEqual(expBuf, sigBuf);
+    console.log("Signature match:", result);
+    return result;
+  } catch (err) {
+    console.error("Signature verification error:", err.message);
+    return false;
+  }
 }
 
 const app = express();
@@ -43,8 +58,17 @@ app.get("/", (_req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-    if (!verifySignature(req)) return res.status(401).send("bad signature");
+    console.log("Webhook request received");
+    console.log("rawBody present:", !!req.rawBody);
+    console.log("rawBody length:", req.rawBody?.length);
+    console.log("X-Hub-Signature-256:", req.get("X-Hub-Signature-256"));
 
+    if (!verifySignature(req)) {
+      console.log("Signature verification failed");
+      return res.status(401).send("bad signature");
+    }
+
+    console.log("Signature verified");
     const event = req.header("X-GitHub-Event");
 
     if (event === "ping") return res.status(200).send("pong");
