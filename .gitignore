@@ -7,5 +7,6 @@ terraform/.terraform/
 *.tfstate.*
 *.log
 dist/
-build/layer/
+build/
+layer/
 terraform/lambda_layer.zip
