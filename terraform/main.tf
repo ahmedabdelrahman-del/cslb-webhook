@@ -64,26 +64,11 @@ resource "aws_iam_role_policy" "lambda_secrets" {
   }
 }
 
-# Lambda Layer with dependencies - use correct structure
-data "archive_file" "dependencies" {
-  type        = "zip"
-  source_dir  = "${path.module}/../node_modules"
-  output_path = "${path.module}/../.terraform/node_modules.zip"
-}
-
-resource "aws_lambda_layer_version" "dependencies" {
-  filename   = data.archive_file.dependencies.output_path
-  layer_name = "cslb-webhook-dependencies"
-
-  source_code_hash = data.archive_file.dependencies.output_base64sha256
-
-  compatible_runtimes = ["nodejs20.x"]
-}
-
-# Lambda Function - include node_modules directly
+# Lambda Function - bundle with node_modules directly
 data "archive_file" "lambda" {
   type        = "zip"
-  source_file = "${path.module}/../lambda.js"
+  source_dir  = "${path.module}/.."
+  excludes    = ["terraform", ".git", ".github", "node_modules/.bin", ".gitignore", "README.md", "server.js", ".terraform"]
   output_path = "${path.module}/../.terraform/lambda.zip"
 }
 
@@ -96,8 +81,6 @@ resource "aws_lambda_function" "webhook" {
   timeout       = 30
 
   source_code_hash = data.archive_file.lambda.output_base64sha256
-
-  layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
