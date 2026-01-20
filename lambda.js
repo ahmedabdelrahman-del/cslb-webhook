@@ -49,6 +49,7 @@ const app = express();
 
 // Store the raw body from Lambda event for signature verification
 let lambdaRawBody = null;
+let lambdaParsedBody = null;
 
 app.use(bodyParser.json({ type: "*/*" }));
 
@@ -65,6 +66,12 @@ app.post(["/webhook", "/prod/webhook"], async (req, res) => {
     
     // Use the raw body captured from Lambda event
     req.rawBody = lambdaRawBody;
+    
+    // Always use the pre-parsed body from Lambda event
+    // Express bodyParser doesn't work correctly with serverless-http
+    req.body = lambdaParsedBody;
+    console.log("req.body keys:", Object.keys(req.body || {}));
+    console.log("req.body.repository:", req.body?.repository?.full_name);
 
     if (!verifySignature(req)) {
       console.log("Signature verification failed");
@@ -154,8 +161,17 @@ module.exports.handler = async (event, context) => {
       ? Buffer.from(event.body, 'base64').toString('utf8')
       : event.body;
     console.log("Lambda event body captured:", lambdaRawBody.length, "bytes");
+    
+    // Pre-parse the body for Express since bodyParser may not work with serverless-http
+    try {
+      lambdaParsedBody = JSON.parse(lambdaRawBody);
+    } catch (e) {
+      console.log("Failed to parse body as JSON:", e.message);
+      lambdaParsedBody = {};
+    }
   } else {
     lambdaRawBody = null;
+    lambdaParsedBody = {};
   }
   
   return serverlessHandler(event, context);
