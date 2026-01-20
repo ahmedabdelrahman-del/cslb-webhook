@@ -28,6 +28,10 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # IAM Policy for CloudWatch Logs
@@ -40,6 +44,10 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 resource "aws_secretsmanager_secret" "github_token" {
   name                    = "cslb-webhook/github-token"
   recovery_window_in_days = 7
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "github_token" {
@@ -176,11 +184,19 @@ resource "aws_apigatewayv2_stage" "prod" {
 resource "aws_cloudwatch_log_group" "api_logs" {
   name              = "/aws/apigateway/cslb-webhook"
   retention_in_days = 7
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/cslb-webhook"
   retention_in_days = 7
+
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Lambda permission for API Gateway
