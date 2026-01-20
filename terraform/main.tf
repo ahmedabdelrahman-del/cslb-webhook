@@ -12,53 +12,39 @@ provider "aws" {
   region = var.aws_region
 }
 
-# IAM Role for Lambda execution
-resource "aws_iam_role" "lambda_role" {
+# Data source to reference existing IAM role
+data "aws_iam_role" "lambda_role" {
   name = "cslb-webhook-lambda-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  lifecycle {
-    ignore_changes = all
-  }
 }
 
-# IAM Policy for CloudWatch Logs
+# IAM Policy for CloudWatch Logs - only attach if not already attached
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = aws_iam_role.lambda_role.name
+  role       = data.aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Secrets Manager for GitHub Token
-resource "aws_secretsmanager_secret" "github_token" {
-  name                    = "cslb-webhook/github-token"
-  recovery_window_in_days = 7
-
+  
   lifecycle {
     ignore_changes = all
   }
+}
+
+# Data source to reference existing Secrets Manager secret
+data "aws_secretsmanager_secret" "github_token" {
+  name = "cslb-webhook/github-token"
 }
 
 resource "aws_secretsmanager_secret_version" "github_token" {
-  secret_id     = aws_secretsmanager_secret.github_token.id
+  secret_id     = data.aws_secretsmanager_secret.github_token.id
   secret_string = var.github_token
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # IAM Policy for Lambda to read secrets
 resource "aws_iam_role_policy" "lambda_secrets" {
   name = "lambda-secrets-policy"
-  role = aws_iam_role.lambda_role.id
+  role = data.aws_iam_role.lambda_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -68,10 +54,14 @@ resource "aws_iam_role_policy" "lambda_secrets" {
         Action = [
           "secretsmanager:GetSecretValue"
         ]
-        Resource = aws_secretsmanager_secret.github_token.arn
+        Resource = data.aws_secretsmanager_secret.github_token.arn
       }
     ]
   })
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Lambda Layer with dependencies - use correct structure
@@ -100,7 +90,7 @@ data "archive_file" "lambda" {
 resource "aws_lambda_function" "webhook" {
   filename      = data.archive_file.lambda.output_path
   function_name = "cslb-webhook"
-  role          = aws_iam_role.lambda_role.arn
+  role          = data.aws_iam_role.lambda_role.arn
   handler       = "lambda.handler"
   runtime       = "nodejs20.x"
   timeout       = 30
@@ -116,6 +106,10 @@ resource "aws_lambda_function" "webhook" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.lambda_logs]
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # API Gateway
