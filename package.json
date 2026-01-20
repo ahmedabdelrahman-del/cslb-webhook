@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ahmedabdelrahman-del/cslb-webhook#readme",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.0.0",
     "body-parser": "^2.2.2",
     "express": "^5.2.1",
     "serverless-http": "^3.2.0"

@@ -6,10 +6,14 @@ const ORG = "test3032001";
 const CSLB_TOPIC = "cslb-id-2343";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
+if (!GITHUB_TOKEN) {
+  throw new Error("Missing GITHUB_TOKEN environment variable");
+}
+
 const app = express();
 app.use(bodyParser.json({ type: "*/*" }));
 
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.status(200).send("✅ Webhook server is running");
 });
 
@@ -17,13 +21,11 @@ app.post("/webhook", async (req, res) => {
   try {
     const event = req.header("X-GitHub-Event");
 
-    if (event === "ping") {
-      return res.status(200).send("pong");
-    }
+    if (event === "ping") return res.status(200).send("pong");
 
     if (event === "push") {
       const owner = req.body?.repository?.owner?.login;
-      const repo  = req.body?.repository?.name;
+      const repo = req.body?.repository?.name;
 
       if (!owner || !repo) return res.status(400).send("missing repo info");
       if (owner !== ORG) return res.status(200).send("ignored - not our org");
@@ -35,7 +37,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     const owner = req.body?.repository?.owner?.login;
-    const repo  = req.body?.repository?.name;
+    const repo = req.body?.repository?.name;
 
     if (owner !== ORG) return res.status(200).send("ignored");
 
@@ -86,6 +88,4 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ✅ Lambda handler (NO basePath, NO app.listen)
 module.exports.handler = serverless(app);
-
