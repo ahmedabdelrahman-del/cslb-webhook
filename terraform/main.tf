@@ -66,7 +66,7 @@ resource "aws_iam_role_policy" "lambda_secrets" {
   })
 }
 
-# Lambda Layer with dependencies
+# Lambda Layer with dependencies - use correct structure
 data "archive_file" "dependencies" {
   type        = "zip"
   source_dir  = "${path.module}/../node_modules"
@@ -82,7 +82,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   compatible_runtimes = ["nodejs20.x"]
 }
 
-# Lambda Function
+# Lambda Function - include node_modules directly
 data "archive_file" "lambda" {
   type        = "zip"
   source_file = "${path.module}/../lambda.js"
