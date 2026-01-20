@@ -12,3 +12,7 @@ output "lambda_function_name" {
   description = "Lambda function name"
   value       = aws_lambda_function.webhook.function_name
 }
+output "note" {
+  description = "Important: HTTP API v2 routes do NOT include the stage name in the path"
+  value       = "Routes are GET /, POST /webhook, GET /webhook (not /prod/webhook)"
+}
