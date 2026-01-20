@@ -162,18 +162,3 @@ resource "aws_lambda_permission" "api_gateway" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.webhook.execution_arn}/*/*"
 }
-variable "aws_region" {
-  default = "us-east-1"
-}
-
-variable "github_token" {
-  description = "GitHub personal access token"
-  type        = string
-  sensitive   = true
-}
-
-variable "webhook_secret" {
-  description = "Webhook secret for GitHub signature validation"
-  type        = string
-  sensitive   = true
-}

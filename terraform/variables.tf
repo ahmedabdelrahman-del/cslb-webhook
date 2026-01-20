@@ -9,3 +9,8 @@ variable "github_token" {
   type        = string
   sensitive   = true
 }
+variable "webhook_secret" {
+  description = "Webhook secret for GitHub signature validation"
+  type        = string
+  sensitive   = true
+}
