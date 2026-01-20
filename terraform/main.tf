@@ -66,7 +66,7 @@ resource "aws_iam_role_policy" "lambda_secrets" {
 
 # Lambda Layer with pre-built node_modules  
 resource "aws_lambda_layer_version" "dependencies" {
-  filename   = abspath("${path.module}/../terraform/lambda_layer.zip")
+  filename   = "${path.module}/lambda_layer.zip"
   layer_name = "cslb-webhook-dependencies"
 
   compatible_runtimes = ["nodejs20.x"]
@@ -102,10 +102,6 @@ resource "aws_lambda_function" "webhook" {
   }
 
   depends_on = [aws_iam_role_policy_attachment.lambda_logs]
-  
-  lifecycle {
-    ignore_changes = all
-  }
 }
 
 # API Gateway
