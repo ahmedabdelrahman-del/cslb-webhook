@@ -20,6 +20,7 @@
   "homepage": "https://github.com/ahmedabdelrahman-del/cslb-webhook#readme",
   "dependencies": {
     "body-parser": "^2.2.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "serverless-http": "^3.2.0"
   }
 }
