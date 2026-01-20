@@ -16,8 +16,25 @@ provider "aws" {
   region = var.aws_region
 }
 
-data "aws_iam_role" "lambda_role" {
+resource "aws_iam_role" "lambda_role" {
   name = "cslb-webhook-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+data "aws_iam_role" "lambda_role" {
+  name = aws_iam_role.lambda_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
@@ -80,11 +97,6 @@ resource "aws_lambda_function" "webhook" {
       WEBHOOK_SECRET = var.webhook_secret
     }
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.lambda_logs,
-    aws_iam_role_policy.lambda_secrets
-  ]
 }
 
 resource "aws_apigatewayv2_api" "webhook" {
@@ -156,7 +168,7 @@ resource "aws_apigatewayv2_stage" "prod" {
 }
 
 resource "aws_lambda_permission" "api_gateway" {
-  statement_id  = "AllowAPIGatewayInvoke"
+  statement_id  = "AllowAPIGatewayInvoke-${aws_apigatewayv2_api.webhook.id}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.webhook.function_name
   principal     = "apigateway.amazonaws.com"
