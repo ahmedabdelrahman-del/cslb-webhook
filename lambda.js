@@ -1,17 +1,34 @@
+const crypto = require("crypto");
 const express = require("express");
 const bodyParser = require("body-parser");
 const serverless = require("serverless-http");
 
 const ORG = "test3032001";
 const CSLB_TOPIC = "cslb-id-2343";
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
-if (!GITHUB_TOKEN) {
-  throw new Error("Missing GITHUB_TOKEN environment variable");
+function requireToken() {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error("Missing GITHUB_TOKEN env var");
+  return token;
+}
+
+function verifySignature(req) {
+  const secret = process.env.WEBHOOK_SECRET;
+  if (!secret) throw new Error("Missing WEBHOOK_SECRET env var");
+  
+  const sig = req.get("X-Hub-Signature-256") || "";
+  const hmac = crypto.createHmac("sha256", secret).update(req.rawBody).digest("hex");
+  const expected = `sha256=${hmac}`;
+  
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
 }
 
 const app = express();
-app.use(bodyParser.json({ type: "*/*" }));
+
+app.use(bodyParser.json({
+  type: "*/*",
+  verify: (req, _res, buf) => { req.rawBody = buf; }
+}));
 
 app.get("/", (_req, res) => {
   res.status(200).send("✅ Webhook server is running");
@@ -19,6 +36,8 @@ app.get("/", (_req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
+    if (!verifySignature(req)) return res.status(401).send("bad signature");
+
     const event = req.header("X-GitHub-Event");
 
     if (event === "ping") return res.status(200).send("pong");
@@ -41,6 +60,7 @@ app.post("/webhook", async (req, res) => {
 
     if (owner !== ORG) return res.status(200).send("ignored");
 
+    const GITHUB_TOKEN = requireToken();
     console.log(`Processing webhook for ${owner}/${repo}`);
 
     const getResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/topics`, {
@@ -83,8 +103,8 @@ app.post("/webhook", async (req, res) => {
     console.log(`✅ Added ${CSLB_TOPIC} to ${owner}/${repo}`);
     return res.status(200).send("ok");
   } catch (err) {
-    console.error("Unhandled error:", err);
-    return res.status(500).send("error");
+    console.error("Webhook error:", err.message);
+    return res.status(401).send("unauthorized");
   }
 });
 
