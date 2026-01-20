@@ -31,6 +31,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Build Lambda layer
+        run: |
+          mkdir -p layer/nodejs
+          cp -r node_modules layer/nodejs/
+          cd layer && zip -r ../terraform/lambda_layer.zip . && cd ..
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 

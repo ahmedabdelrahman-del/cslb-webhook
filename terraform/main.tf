@@ -64,11 +64,20 @@ resource "aws_iam_role_policy" "lambda_secrets" {
   }
 }
 
-# Lambda Function - bundle with node_modules directly
+# Lambda Layer with pre-built node_modules
+resource "aws_lambda_layer_version" "dependencies" {
+  filename   = "${path.module}/../terraform/lambda_layer.zip"
+  layer_name = "cslb-webhook-dependencies"
+
+  source_code_hash = filebase64sha256("${path.module}/../terraform/lambda_layer.zip")
+
+  compatible_runtimes = ["nodejs20.x"]
+}
+
+# Lambda Function - minimal package with only essential files
 data "archive_file" "lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/.."
-  excludes    = ["terraform", ".git", ".github", "node_modules/.bin", ".gitignore", "README.md", "server.js", ".terraform"]
+  source_file = "${path.module}/../lambda.js"
   output_path = "${path.module}/../.terraform/lambda.zip"
 }
 
@@ -81,6 +90,8 @@ resource "aws_lambda_function" "webhook" {
   timeout       = 30
 
   source_code_hash = data.archive_file.lambda.output_base64sha256
+
+  layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
