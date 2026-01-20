@@ -49,6 +49,7 @@ jobs:
         run: |
           terraform plan -no-color \
             -var="github_token=${{ secrets.GIT_TOKEN }}" \
+            -var="webhook_secret=${{ secrets.WEBHOOK_SECRET }}" \
             -out=tfplan
 
       - name: Terraform Apply
