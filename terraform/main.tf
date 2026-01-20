@@ -64,14 +64,16 @@ resource "aws_iam_role_policy" "lambda_secrets" {
   }
 }
 
-# Lambda Layer with pre-built node_modules
+# Lambda Layer with pre-built node_modules  
 resource "aws_lambda_layer_version" "dependencies" {
-  filename   = "${path.module}/../terraform/lambda_layer.zip"
+  filename   = abspath("${path.module}/../terraform/lambda_layer.zip")
   layer_name = "cslb-webhook-dependencies"
 
-  source_code_hash = filebase64sha256("${path.module}/../terraform/lambda_layer.zip")
-
   compatible_runtimes = ["nodejs20.x"]
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Lambda Function - minimal package with only essential files
