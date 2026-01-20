@@ -89,4 +89,6 @@ app.post("/webhook", async (req, res) => {
   res.status(200).send("ok");
 });
 
-module.exports.handler = serverless(app);
+module.exports.handler = serverless(app, {
+  basePath: '/prod'
+});
