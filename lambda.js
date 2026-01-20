@@ -15,12 +15,19 @@ function requireToken() {
 function verifySignature(req) {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret) throw new Error("Missing WEBHOOK_SECRET env var");
-  
-  const sig = req.get("X-Hub-Signature-256") || "";
-  const hmac = crypto.createHmac("sha256", secret).update(req.rawBody).digest("hex");
+
+  const sig = req.get("X-Hub-Signature-256");
+  const raw = req.rawBody;
+  if (!sig || !raw) return false;
+
+  const hmac = crypto.createHmac("sha256", secret).update(raw).digest("hex");
   const expected = `sha256=${hmac}`;
-  
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+
+  return crypto.timingSafeEqual(expBuf, sigBuf);
 }
 
 const app = express();
