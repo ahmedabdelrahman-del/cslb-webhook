@@ -16,25 +16,8 @@ provider "aws" {
   region = var.aws_region
 }
 
-resource "aws_iam_role" "lambda_role" {
-  name = "cslb-webhook-lambda-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
 data "aws_iam_role" "lambda_role" {
-  name = aws_iam_role.lambda_role.name
+  name = "cslb-webhook-lambda-role"
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
@@ -71,6 +54,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   filename            = "${path.module}/lambda_layer.zip"
   layer_name          = "cslb-webhook-dependencies"
   compatible_runtimes = ["nodejs20.x"]
+  source_code_hash    = filebase64sha256("${path.module}/lambda_layer.zip")
 }
 
 data "archive_file" "lambda" {

@@ -47,21 +47,24 @@ function verifySignature(req) {
 
 const app = express();
 
-app.use(bodyParser.json({
-  type: "*/*",
-  verify: (req, _res, buf) => { req.rawBody = buf; }
-}));
+// Store the raw body from Lambda event for signature verification
+let lambdaRawBody = null;
 
-app.get("/", (_req, res) => {
+app.use(bodyParser.json({ type: "*/*" }));
+
+app.get(["/", "/prod", "/prod/"], (_req, res) => {
   res.status(200).send("✅ Webhook server is running");
 });
 
-app.post("/webhook", async (req, res) => {
+app.post(["/webhook", "/prod/webhook"], async (req, res) => {
   try {
     console.log("Webhook request received");
-    console.log("rawBody present:", !!req.rawBody);
-    console.log("rawBody length:", req.rawBody?.length);
+    console.log("lambdaRawBody present:", !!lambdaRawBody);
+    console.log("lambdaRawBody length:", lambdaRawBody?.length);
     console.log("X-Hub-Signature-256:", req.get("X-Hub-Signature-256"));
+    
+    // Use the raw body captured from Lambda event
+    req.rawBody = lambdaRawBody;
 
     if (!verifySignature(req)) {
       console.log("Signature verification failed");
@@ -139,4 +142,21 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-module.exports.handler = serverless(app);
+// Wrap serverless handler to capture raw body from Lambda event
+const serverlessHandler = serverless(app);
+
+module.exports.handler = async (event, context) => {
+  // Capture the raw body from the Lambda event for signature verification
+  // API Gateway HTTP API (v2) provides the body as a string in event.body
+  if (event.body) {
+    // If body is base64 encoded, decode it
+    lambdaRawBody = event.isBase64Encoded 
+      ? Buffer.from(event.body, 'base64').toString('utf8')
+      : event.body;
+    console.log("Lambda event body captured:", lambdaRawBody.length, "bytes");
+  } else {
+    lambdaRawBody = null;
+  }
+  
+  return serverlessHandler(event, context);
+};
