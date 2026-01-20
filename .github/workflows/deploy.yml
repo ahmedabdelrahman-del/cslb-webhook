@@ -12,9 +12,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +19,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Set up Node.js
@@ -45,7 +43,7 @@ jobs:
         working-directory: terraform
         run: |
           terraform plan -no-color \
-            -var="github_token=${{ secrets.GITHUB_TOKEN }}" \
+            -var="github_token=${{ secrets.GIT_TOKEN }}" \
             -out=tfplan
 
       - name: Terraform Apply
@@ -56,5 +54,8 @@ jobs:
       - name: Output Webhook URL
         working-directory: terraform
         run: |
-          echo "Webhook URL:"
+          echo "=== Webhook URL ==="
           terraform output -no-color webhook_url
+          echo ""
+          echo "=== Add this URL to GitHub webhook settings ==="
+          echo "Organization: https://github.com/organizations/test3032001/settings/hooks"
