@@ -25,31 +25,6 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-data "aws_secretsmanager_secret" "github_token" {
-  name = "cslb-webhook/github-token"
-}
-
-resource "aws_secretsmanager_secret_version" "github_token" {
-  secret_id     = data.aws_secretsmanager_secret.github_token.id
-  secret_string = var.github_token
-}
-
-resource "aws_iam_role_policy" "lambda_secrets" {
-  name = "lambda-secrets-policy"
-  role = data.aws_iam_role.lambda_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = data.aws_secretsmanager_secret.github_token.arn
-      }
-    ]
-  })
-}
-
 resource "aws_lambda_layer_version" "dependencies" {
   layer_name          = "cslb-webhook-dependencies"
   compatible_runtimes = ["nodejs20.x"]
