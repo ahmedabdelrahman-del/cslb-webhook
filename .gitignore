@@ -10,3 +10,7 @@ dist/
 build/
 layer/
 terraform/lambda_layer.zip
+terraform/tfplan
+*.zip
+layer.zip
+terraform/awscliv2.zip

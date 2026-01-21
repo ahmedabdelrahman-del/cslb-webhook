@@ -158,6 +158,15 @@ app.post(["/webhook", "/prod/webhook"], async (req, res) => {
 const serverlessHandler = serverless(app);
 
 module.exports.handler = async (event, context) => {
+  const method = event?.requestContext?.http?.method || event?.httpMethod;
+  const path = event?.rawPath || event?.path || "";
+
+  // Skip signature verification for GET/OPTIONS (health checks, CORS preflight)
+  if (method === "GET" || method === "OPTIONS") {
+    console.log(`Skipping signature check for ${method} ${path}`);
+    return serverlessHandler(event, context);
+  }
+
   const secret = process.env.WEBHOOK_SECRET;
 
   const headers = event.headers || {};
