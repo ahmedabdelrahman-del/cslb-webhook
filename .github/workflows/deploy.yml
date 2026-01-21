@@ -8,6 +8,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  LAYER_S3_BUCKET: my-lambda-artifacts-646977526611
+  LAYER_S3_KEY: layers/lambda_layer.zip
 
 jobs:
   deploy:
@@ -26,16 +28,29 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Lambda layer
         run: |
+          rm -rf layer terraform/lambda_layer.zip
           mkdir -p layer/nodejs
           cp -r node_modules layer/nodejs/
-          cd layer && zip -r ../terraform/lambda_layer.zip . && cd ..
+          cd layer
+          zip -r ../terraform/lambda_layer.zip .
+          cd ..
+
+      - name: Upload Lambda layer to S3 + set Terraform vars
+        run: |
+          aws s3 cp terraform/lambda_layer.zip "s3://${LAYER_S3_BUCKET}/${LAYER_S3_KEY}"
+
+          LAYER_HASH=$(openssl dgst -sha256 -binary terraform/lambda_layer.zip | openssl base64)
+
+          echo "TF_VAR_layer_s3_bucket=${LAYER_S3_BUCKET}" >> $GITHUB_ENV
+          echo "TF_VAR_layer_s3_key=${LAYER_S3_KEY}" >> $GITHUB_ENV
+          echo "TF_VAR_layer_hash=${LAYER_HASH}" >> $GITHUB_ENV
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -54,8 +69,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform
-        run: |
-          terraform apply -no-color -auto-approve tfplan
+        run: terraform apply -no-color -auto-approve tfplan
 
       - name: Output Webhook URL
         working-directory: terraform
