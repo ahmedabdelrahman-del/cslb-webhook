@@ -14,3 +14,17 @@ variable "webhook_secret" {
   type        = string
   sensitive   = true
 }
+variable "layer_s3_bucket" {
+  description = "S3 bucket that contains lambda layer zip"
+  type        = string
+}
+
+variable "layer_s3_key" {
+  description = "S3 key for lambda layer zip"
+  type        = string
+}
+
+variable "layer_hash" {
+  description = "Base64-encoded SHA256 of the layer zip (for updates)"
+  type        = string
+}

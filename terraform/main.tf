@@ -51,11 +51,16 @@ resource "aws_iam_role_policy" "lambda_secrets" {
 }
 
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = "${path.module}/lambda_layer.zip"
   layer_name          = "cslb-webhook-dependencies"
   compatible_runtimes = ["nodejs20.x"]
-  source_code_hash    = filebase64sha256("${path.module}/lambda_layer.zip")
+
+  s3_bucket        = var.layer_s3_bucket
+  s3_key           = var.layer_s3_key
+  source_code_hash = var.layer_hash
 }
+
+
+
 
 data "archive_file" "lambda" {
   type        = "zip"
